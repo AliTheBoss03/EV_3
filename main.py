@@ -1,4 +1,9 @@
-#!/usr/bin/env pybricks-micropython
+#!/usr/bin/en
+SERVER_IP = '172.20.10.4'  # Opdateret IP-adresse hvis nødvendigt
+SERVER_PORT = 5000
+
+# Funktion til at behandle detektionsresultater og handle derefter
+def process_detections(detectv pybricks-micropython
 from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import Motor, UltrasonicSensor
 from pybricks.parameters import Port, Direction, Stop
@@ -22,12 +27,7 @@ except OSError as e:
     raise
 
 robot = DriveBase(left_wheel, right_wheel, wheel_diameter=65, axle_track=230)
-
-SERVER_IP = '172.20.10.6'  # Erstat med din servers IP-adresse
-SERVER_PORT = 5000
-
-# Funktion til at behandle detektionsresultater og handle derefter
-def process_detections(detections):
+ions):
     white_balls = [d for d in detections if d['class'] == 'white ball']
     orange_balls = [d for d in detections if d['class'] == 'orange ball']
     eggs = [d for d in detections if d['class'] == 'egg']
@@ -94,7 +94,7 @@ while True:
                 
                 # Behandle detektionsresultater
                 process_detections(objects_detected)
-            except json.JSONDecodeError:
+            except ValueError:  # Fange JSON-dekodningsfejl
                 print("Failed to decode JSON from body: {}".format(body))
         else:
             print("No body in response or body is empty.")
@@ -172,14 +172,14 @@ while True:
                     robot.drive(280, 0)
                 else:
                     print('Something went wrong: {}'.format(command['idk']))
-            except json.JSONDecodeError:
+            except ValueError:  # Fange JSON-dekodningsfejl
                 print("Failed to decode JSON from body: {}".format(body))
         else:
             print("No body in response or body is empty.")
         
         # Luk socket-forbindelsen
         sock.close()
-    except json.JSONDecodeError:
+    except ValueError:  # Fange JSON-dekodningsfejl
         print("An error occurred: No JSON object could be decoded")
     except Exception as e:
         print("An error occurred: {}".format(e))
