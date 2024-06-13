@@ -11,7 +11,7 @@ def capture_and_send_image():
             print("Failed to capture image")
             break
 
-        _, img_encoded = cv2.imencode('.png', frame)
+        _, img_encoded = cv2.imencode('.png  ', frame)
         response = requests.post(
             FLASK_SERVER_URL,
             files={"image": img_encoded.tobytes()}
