@@ -25,3 +25,4 @@ def capture_and_send_image():
 
 if __name__ == "__main__":
     capture_and_send_image()
+
