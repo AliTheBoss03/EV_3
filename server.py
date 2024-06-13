@@ -5,7 +5,7 @@ import io
 
 app = Flask(__name__)
 
-ROBOFLOW_API_KEY = "5GCwRixOLoTFBdRwO1hM"  # Sørg for at bruge din egen Roboflow API-nøgle
+ROBOFLOW_API_KEY = "qn06Xx676ZZRgpdMTVyB"  # Sørg for at bruge din egen Roboflow API-nøgle
 ROBOFLOW_MODEL_ENDPOINT = "https://detect.roboflow.com"  # URL til Roboflow-modellen
 EV3_SERVER_URL = "http://172.20.10.5:5000/command"  # IP-adressen til EV3-serveren, opdater hvis nødvendigt
 
