@@ -1,5 +1,6 @@
-#!/usr/bin/env pybricks-micropython
 
+
+#!/usr/bin/env pybricks-micropython
 from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import Motor, UltrasonicSensor
 from pybricks.parameters import Port, Stop
@@ -20,26 +21,14 @@ ultrasonic_sensor = UltrasonicSensor(Port.S1)
 robot = DriveBase(left_wheel, right_wheel, wheel_diameter=65, axle_track=230)
 
 def process_detections(detections):
-    white_balls = [d for d in detections if d['class'] == 'white ball']
     orange_balls = [d for d in detections if d['class'] == 'orange ball']
-    eggs = [d for d in detections if d['class'] == 'egg']
-    walls = [d for d in detections if d['class'] == 'walls']
-    crosses = [d for d in detections if d['class'] == 'cross']
-    goal = [d for d in detections if d['class'] == 'big goal']
 
     if orange_balls:
-        ev3.speaker.say("Orange ball detected")
+        ev3.speaker.say("Jeg kan se en orange bold")
         move_towards_object(orange_balls[0]['center'])
         front_arm.run_angle(500, 360, Stop.HOLD)
-    elif white_balls:
-        ev3.speaker.say("White ball detected")
-        move_towards_object(white_balls[0]['center'])
-        front_arm.run_angle(500, 360, Stop.HOLD)
-    elif eggs or walls or crosses:
-        ev3.speaker.say("Obstacle detected")
-        robot.turn(180)
     else:
-        ev3.speaker.say("I have lost")
+        ev3.speaker.say("Jeg kan ikke se noget")
 
 def move_towards_object(object_center, image_center=(320, 240)):
     x, y = object_center
@@ -61,7 +50,7 @@ while True:
         sock.connect((SERVER_IP, SERVER_PORT))
         
         # Send en HTTP GET-anmodning til serveren
-        request = "GET /detect HTTP/1.1\r\nHost: {}\r\n\r\n".format(SERVER_IP)
+        request = f"GET /detect HTTP/1.1\r\nHost: {SERVER_IP}\r\n\r\n"
         sock.send(request.encode())
         
         # Modtag svaret fra serveren
@@ -81,7 +70,7 @@ while True:
                 # Behandle detektionsresultater
                 process_detections(objects_detected)
             except ValueError as e:
-                print("Failed to decode JSON from body: {body}, Error: {e}")
+                print(f"Failed to decode JSON from body: {body}, Error: {e}")
         else:
             print("No body in response or body is empty.")
         
@@ -92,5 +81,5 @@ while True:
         time.sleep(1)
 
     except Exception as e:
-        print("An error occurred: {e}")
+        print(f"An error occurred: {e}")
         time.sleep(1)
