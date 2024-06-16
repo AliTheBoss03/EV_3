@@ -11,20 +11,19 @@ EV3_SERVER_URL = "http://172.20.10.10:5000/command"  # Korrekt IP-adresse til di
 
 @app.route('/detect', methods=['GET'])
 def detect():
+    # Dette endpoint bruges til at tjekke kommunikation
     return jsonify({"status": "success", "predictions": []})
 
 @app.route('/process_image', methods=['POST'])
 def process_image():
     try:
-        # Tjek om der er en fil med navnet 'image' i POST-anmodningen
         if 'image' not in request.files:
             return jsonify({"error": "No image file found in the request"}), 400
 
-        # Hent billede fra POST-anmodningen
         image = request.files['image'].read()
         image = Image.open(io.BytesIO(image))
 
-        # Gem billedet midlertidigt (kan slettes senere)
+        # Gem billedet midlertidigt
         image_path = "C:/Users/amaan/desktop/bil/test_image.jpg"  # Sørg for, at denne sti er korrekt og findes
         image.save(image_path)
 
@@ -33,7 +32,7 @@ def process_image():
         ev3_response = requests.post(EV3_SERVER_URL, files=files)
 
         if ev3_response.status_code != 200:
-            error_message = f"Error from EV3 Server: {ev3_response.text}"
+            error_message = "Error from EV3 Server: {ev3_response.text}"
             print(error_message)
             return jsonify({"error": "Failed to send image to EV3", "details": error_message}), 500
 

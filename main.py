@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env pybricks-micropython
 from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import Motor, UltrasonicSensor
@@ -50,7 +48,7 @@ while True:
         sock.connect((SERVER_IP, SERVER_PORT))
         
         # Send en HTTP GET-anmodning til serveren
-        request = f"GET /detect HTTP/1.1\r\nHost: {SERVER_IP}\r\n\r\n"
+        request = "GET /detect HTTP/1.1\r\nHost: {SERVER_IP}\r\n\r\n"
         sock.send(request.encode())
         
         # Modtag svaret fra serveren
@@ -70,7 +68,7 @@ while True:
                 # Behandle detektionsresultater
                 process_detections(objects_detected)
             except ValueError as e:
-                print(f"Failed to decode JSON from body: {body}, Error: {e}")
+                print("Failed to decode JSON from body: {body}, Error: {e}")
         else:
             print("No body in response or body is empty.")
         
@@ -81,5 +79,5 @@ while True:
         time.sleep(1)
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print("An error occurred: {e}")
         time.sleep(1)
