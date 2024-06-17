@@ -5,6 +5,9 @@ import io
 
 app = Flask(__name__)
 
+#model_path = '/path_to_your_model/model.h5'
+#model = tf.keras.models.load_model(model_path)
+
 ROBOFLOW_API_KEY = "qn06Xx676ZZRgpdMTVyB"  # Brug din egen Roboflow API-nøgle
 ROBOFLOW_MODEL_ENDPOINT = "https://detect.roboflow.com/robot-ev3/4"  # URL til Roboflow-modellen
 EV3_SERVER_URL = "http://172.20.10.5:5000/command"  # IP-adressen til EV3-serveren, opdater hvis nødvendigt
