@@ -42,7 +42,7 @@ def calculate_angle(target_pos, robot_center, robot_orientation):
         relative_angle -= 360
     return relative_angle
 
-def send_command(command, ip='172.20.10.2', port=5000):
+def send_command(command, ip='172.20.10.10', port=5000):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (ip, port)
     try:
@@ -105,6 +105,8 @@ while cap.isOpened():
         back_pos = None
         obstacles = []
         ball_positions = []
+        big_goal_pos = None
+        delay = 0.1  # Default delay
 
         for detection in detections:
             class_id = int(detection.cls[0])
@@ -119,6 +121,8 @@ while cap.isOpened():
                 back_pos = (center_x, center_y)
             elif label in ['walls', 'cross']:
                 obstacles.append((center_x, center_y))
+            elif label == 'big goal':
+                big_goal_pos = (center_x, center_y)
 
         if front_pos and back_pos:
             # Calculate the robot's center and orientation
@@ -131,7 +135,12 @@ while cap.isOpened():
         print(f"Detected balls: {ball_positions}")
         print(f"Detected obstacles: {obstacles}")
 
-        if ball_positions:
+        if len(ball_positions) == 6 and big_goal_pos:
+            command = 'move_to_goal'
+            print(f"Sending command: {command}")
+            send_command(command)
+            time.sleep(5)  # Adjust the time the robot moves towards the goal
+        elif ball_positions:
             # Use A* to find the path to the closest ball
             start = robot_center
             closest_ball = min(ball_positions, key=lambda pos: np.linalg.norm(np.array(pos) - np.array(start)))
@@ -168,7 +177,8 @@ while cap.isOpened():
             else:
                 print("No valid path found.")
                 command = 'stop'
-            
+                delay = 0.1  # Ensure delay is defined
+        
         print(f"Sending command: {command}")
 
         # Send command to EV3
