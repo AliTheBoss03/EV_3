@@ -29,7 +29,7 @@ robot_center = (100, 100)  # Initial assumption of the robot's center
 robot_orientation = 0  # Initial orientation of the robot
 
 # Define safe zone as a bounding box within 'walls'
-def calculate_inner_safe_zone(obstacles, margin=10):
+def calculate_inner_safe_zone(obstacles, margin=50):  # Adjust margin for a smaller safe zone
     if not obstacles:
         return None
     x_coords = [pos[0] for pos in obstacles]
@@ -159,10 +159,13 @@ while cap.isOpened():
         # Calculate the inner safe zone
         safe_zone = calculate_inner_safe_zone(obstacles)
 
+        # Filter balls within the safe zone
+        ball_positions = [pos for pos in ball_positions if is_within_safe_zone(pos, safe_zone)]
+
         # Check if the robot is within the safe zone
         if not is_within_safe_zone(robot_center, safe_zone):
             print("Robot is out of the safe zone! Stopping...")
-            send_command('stop')
+            send_command('move_backward')
             break
 
         if len(ball_positions) == 6 and big_goal_pos:
