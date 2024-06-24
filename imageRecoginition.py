@@ -114,7 +114,7 @@ cap = cv2.VideoCapture(0)
 
 # Timer to trigger the robot to move to the target point every 2 minutes
 start_time = time.time()
-interval = 210  # Two minutes in seconds
+interval = 120  # Two minutes in seconds
 
 while cap.isOpened():
     success, frame = cap.read()
@@ -243,19 +243,19 @@ while cap.isOpened():
             start_time = current_time
             # Move to the target point
             send_command('move_to_target_point')
-            time.sleep(5)  # Allow time to move to the target point
+            time.sleep(20)  # Allow time to move to the target point
 
             # Align the robot to the point
             send_command('align_to_target_point')
-            time.sleep(2)  # Allow time to align
+            time.sleep(10)  # Allow time to align
 
             # Perform the shooting sequence
             send_command('start_grabber_reverse')
             for _ in range(3):  # Repeat the forward and backward motion 3 times
                 send_command('move_forward')
-                time.sleep(1)  # Adjust based on needed motion duration
+                time.sleep(2)  # Adjust based on needed motion duration
                 send_command('move_backward')
-                time.sleep(1)  # Adjust based on needed motion duration
+                time.sleep(2)  # Adjust based on needed motion duration
             send_command('stop_grabber')
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
