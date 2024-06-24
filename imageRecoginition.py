@@ -7,7 +7,7 @@ import math
 from ultralytics import YOLO
 
 # Initialize the model
-model = YOLO("/Users/alimo/Desktop/EV_3/Assets/best_openvino_model")
+model = YOLO("/Users/alimo/Desktop/EV_3/AssetsBest/best_openvino_model")
 
 # Define the object names based on the provided YAML
 object_names = {
@@ -28,6 +28,16 @@ focal_length = 700  # focal length of the camera in pixels (example value)
 robot_center = (100, 100)  # Initial assumption of the robot's center
 robot_orientation = 0  # Initial orientation of the robot
 
+# Define safe zone as a bounding box within 'walls'
+def calculate_inner_safe_zone(obstacles, margin=10):
+    if not obstacles:
+        return None
+    x_coords = [pos[0] for pos in obstacles]
+    y_coords = [pos[1] for pos in obstacles]
+    x1, y1 = min(x_coords) + margin, min(y_coords) + margin
+    x2, y2 = max(x_coords) - margin, max(y_coords) - margin
+    return (x1, y1, x2, y2)
+
 def calculate_distance(pixel_height):
     real_height_of_ball = 7  # cm (example value, adjust as necessary)
     distance = (real_height_of_ball * focal_length) / pixel_height
@@ -42,6 +52,12 @@ def calculate_angle(target_pos, robot_center, robot_orientation):
         relative_angle -= 360
     return relative_angle
 
+def is_within_safe_zone(pos, safe_zone):
+    if safe_zone:
+        x1, y1, x2, y2 = safe_zone
+        return x1 <= pos[0] <= x2 and y1 <= pos[1] <= y2
+    return False
+
 def send_command(command, ip='172.20.10.10', port=5000):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (ip, port)
@@ -50,7 +66,7 @@ def send_command(command, ip='172.20.10.10', port=5000):
     finally:
         sock.close()
 
-def astar(start, goal, obstacles):
+def astar(start, goal, obstacles, safe_zone):
     def heuristic(a, b):
         return np.linalg.norm(np.array(a) - np.array(b))
 
@@ -58,7 +74,7 @@ def astar(start, goal, obstacles):
         x, y = node
         results = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
         results = filter(lambda pos: 0 <= pos[0] < 640 and 0 <= pos[1] < 480, results)
-        results = filter(lambda pos: pos not in obstacles, results)
+        results = filter(lambda pos: pos not in obstacles and is_within_safe_zone(pos, safe_zone), results)
         return results
 
     queue = []
@@ -79,6 +95,11 @@ def astar(start, goal, obstacles):
                 priority = new_cost + heuristic(goal, next)
                 heapq.heappush(queue, (priority, next))
                 came_from[next] = current
+
+    # Check if a path was found
+    if goal not in came_from:
+        print(f"No path found to goal: {goal}")
+        return []
 
     path = []
     node = goal
@@ -120,7 +141,7 @@ while cap.isOpened():
             elif label == 'back':
                 back_pos = (center_x, center_y)
             elif label in ['walls', 'cross']:
-                obstacles.append((center_x, center_y))
+                obstacles.extend([(x1, y1), (x2, y2)])
             elif label == 'big goal':
                 big_goal_pos = (center_x, center_y)
 
@@ -135,6 +156,15 @@ while cap.isOpened():
         print(f"Detected balls: {ball_positions}")
         print(f"Detected obstacles: {obstacles}")
 
+        # Calculate the inner safe zone
+        safe_zone = calculate_inner_safe_zone(obstacles)
+
+        # Check if the robot is within the safe zone
+        if not is_within_safe_zone(robot_center, safe_zone):
+            print("Robot is out of the safe zone! Stopping...")
+            send_command('stop')
+            break
+
         if len(ball_positions) == 6 and big_goal_pos:
             command = 'move_to_goal'
             print(f"Sending command: {command}")
@@ -144,40 +174,42 @@ while cap.isOpened():
             # Use A* to find the path to the closest ball
             start = robot_center
             closest_ball = min(ball_positions, key=lambda pos: np.linalg.norm(np.array(pos) - np.array(start)))
-            path = astar(start, closest_ball, obstacles)
+            path = astar(start, closest_ball, obstacles, safe_zone)
 
-            print(f"Path to the closest ball: {path}")
-
-            if path and len(path) > 1:
-                next_move = path[1]  # The next move in the path
-                angle = calculate_angle(next_move, robot_center, robot_orientation)
-                print(f"Next move: {next_move}, Angle: {angle}")
-
-                # Tolerance angle for small adjustments
-                tolerance_angle = 15
-                
-                if -tolerance_angle <= angle <= tolerance_angle:
-                    command = 'move_forward'
-                elif angle < -tolerance_angle:
-                    command = 'turn_left'
-                elif angle > tolerance_angle:
-                    command = 'turn_right'
-
-                # Calculate delay based on angle
-                delay = math.log1p(abs(angle)) * 0.1  # Adjust the multiplier as necessary
-
-                # Update robot center and orientation after command
-                if command == 'move_forward':
-                    robot_center = next_move
-                elif command == 'turn_left':
-                    robot_orientation -= 10  # Adjust based on actual turn angle
-                elif command == 'turn_right':
-                    robot_orientation += 10  # Adjust based on actual turn angle
-                
-            else:
-                print("No valid path found.")
+            if not path:
+                print(f"No valid path found to ball at {closest_ball}. Stopping...")
                 command = 'stop'
-                delay = 0.1  # Ensure delay is defined
+            else:
+                print(f"Path to the closest ball: {path}")
+
+                if len(path) > 1:
+                    next_move = path[1]  # The next move in the path
+                    angle = calculate_angle(next_move, robot_center, robot_orientation)
+                    print(f"Next move: {next_move}, Angle: {angle}")
+
+                    # Tolerance angle for small adjustments
+                    tolerance_angle = 15
+                    
+                    if -tolerance_angle <= angle <= tolerance_angle:
+                        command = 'move_forward'
+                    elif angle < -tolerance_angle:
+                        command = 'turn_left'
+                    elif angle > tolerance_angle:
+                        command = 'turn_right'
+
+                    # Calculate delay based on angle
+                    delay = math.log1p(abs(angle)) * 0.1  # Adjust the multiplier as necessary
+
+                    # Update robot center and orientation after command
+                    if command == 'move_forward':
+                        robot_center = next_move
+                    elif command == 'turn_left':
+                        robot_orientation -= 10  # Adjust based on actual turn angle
+                    elif command == 'turn_right':
+                        robot_orientation += 10  # Adjust based on actual turn angle
+                else:
+                    command = 'stop'
+                    delay = 0.1  # Ensure delay is defined
         
         print(f"Sending command: {command}")
 
@@ -189,6 +221,12 @@ while cap.isOpened():
         
         # Plot and show the results
         annotated_frame = results[0].plot()
+
+        # Draw the inner safe zone
+        if safe_zone:
+            x1, y1, x2, y2 = safe_zone
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Blue rectangle for inner safe zone
+
         cv2.imshow("Yolov8 Inference", annotated_frame)
         
         if cv2.waitKey(1) & 0xFF == ord("q"):
