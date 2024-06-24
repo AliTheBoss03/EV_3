@@ -229,6 +229,12 @@ while cap.isOpened():
         if safe_zone:
             x1, y1, x2, y2 = safe_zone
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Blue rectangle for inner safe zone
+            
+            # Draw point in the middle of the left line of the safe zone, aligned vertically with the center of big goal
+            if big_goal_pos:
+                point_x = x1  # Left boundary of the safe zone
+                point_y = (y1 + y2) // 2  # Middle of the left boundary
+                cv2.circle(annotated_frame, (point_x, point_y), 5, (0, 255, 0), -1)  # Green point
 
         cv2.imshow("Yolov8 Inference", annotated_frame)
         
