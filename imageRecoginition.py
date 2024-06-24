@@ -112,6 +112,10 @@ def astar(start, goal, obstacles, safe_zone):
 # Open the video capture
 cap = cv2.VideoCapture(0)
 
+# Timer to trigger the robot to move to the target point every 2 minutes
+start_time = time.time()
+interval = 210  # Two minutes in seconds
+
 while cap.isOpened():
     success, frame = cap.read()
     
@@ -166,13 +170,8 @@ while cap.isOpened():
         if not is_within_safe_zone(robot_center, safe_zone):
             print("Robot is out of the safe zone! Stopping...")
             send_command('move_backward')
-            break
-
-        if len(ball_positions) == 6 and big_goal_pos:
-            command = 'move_to_goal'
-            print(f"Sending command: {command}")
-            send_command(command)
-            time.sleep(5)  # Adjust the time the robot moves towards the goal
+            time.sleep(1)  # Adjust the time the robot moves backward
+        
         elif ball_positions:
             # Use A* to find the path to the closest ball
             start = robot_center
@@ -237,7 +236,28 @@ while cap.isOpened():
                 cv2.circle(annotated_frame, (point_x, point_y), 5, (0, 255, 0), -1)  # Green point
 
         cv2.imshow("Yolov8 Inference", annotated_frame)
-        
+
+        # Check if it's time to go to the target point and perform the actions
+        current_time = time.time()
+        if current_time - start_time >= interval:
+            start_time = current_time
+            # Move to the target point
+            send_command('move_to_target_point')
+            time.sleep(5)  # Allow time to move to the target point
+
+            # Align the robot to the point
+            send_command('align_to_target_point')
+            time.sleep(2)  # Allow time to align
+
+            # Perform the shooting sequence
+            send_command('start_grabber_reverse')
+            for _ in range(3):  # Repeat the forward and backward motion 3 times
+                send_command('move_forward')
+                time.sleep(1)  # Adjust based on needed motion duration
+                send_command('move_backward')
+                time.sleep(1)  # Adjust based on needed motion duration
+            send_command('stop_grabber')
+
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
     else:
