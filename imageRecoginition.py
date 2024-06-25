@@ -58,7 +58,13 @@ def is_within_safe_zone(pos, safe_zone):
         return x1 <= pos[0] <= x2 and y1 <= pos[1] <= y2
     return False
 
-def send_command(command, ip='172.20.10.10', port=5000):
+def is_within_cross(pos, cross_bbox):
+    if cross_bbox:
+        x1, y1, x2, y2 = cross_bbox
+        return x1 <= pos[0] <= x2 and y1 <= pos[1] <= y2
+    return False
+
+def send_command(command, ip='172.20.10.14', port=5000):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (ip, port)
     try:
@@ -96,9 +102,7 @@ def astar(start, goal, obstacles, safe_zone):
                 heapq.heappush(queue, (priority, next))
                 came_from[next] = current
 
-    # Check if a path was found
     if goal not in came_from:
-        print(f"No path found to goal: {goal}")
         return []
 
     path = []
@@ -116,6 +120,10 @@ cap = cv2.VideoCapture(0)
 start_time = time.time()
 interval = 120  # Two minutes in seconds
 
+# Define the target point
+target_point = None
+target_tolerance = 10  # Tolerance distance in pixels to consider the robot at the target point
+
 while cap.isOpened():
     success, frame = cap.read()
     
@@ -131,6 +139,7 @@ while cap.isOpened():
         obstacles = []
         ball_positions = []
         big_goal_pos = None
+        cross_bbox = None
         delay = 0.1  # Default delay
 
         for detection in detections:
@@ -138,13 +147,15 @@ while cap.isOpened():
             label = object_names.get(class_id, 'Unknown')
             x1, y1, x2, y2 = map(int, detection.xyxy[0])
             center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
-            if label == 'white ball':
+            if label in ['white ball', 'orange ball']:
                 ball_positions.append((center_x, center_y))
             elif label == 'front':
                 front_pos = (center_x, center_y)
             elif label == 'back':
                 back_pos = (center_x, center_y)
-            elif label in ['walls', 'cross']:
+            elif label == 'cross':  # Treat "cross" as an obstacle
+                cross_bbox = (x1, y1, x2, y2)
+            elif label in ['walls']:
                 obstacles.extend([(x1, y1), (x2, y2)])
             elif label == 'big goal':
                 big_goal_pos = (center_x, center_y)
@@ -163,19 +174,27 @@ while cap.isOpened():
         # Calculate the inner safe zone
         safe_zone = calculate_inner_safe_zone(obstacles)
 
-        # Filter balls within the safe zone
-        ball_positions = [pos for pos in ball_positions if is_within_safe_zone(pos, safe_zone)]
+        # Define the target point within the safe zone
+        if big_goal_pos and safe_zone:
+            x1, y1, x2, y2 = safe_zone
+            target_point = (x1, (y1 + y2) // 2)  # Middle of the left boundary
+            cv2.circle(frame, target_point, 5, (0, 255, 0), -1)  # Green point for visualization
+
+        # Filter balls within the safe zone and not within the cross
+        ball_positions = [pos for pos in ball_positions if is_within_safe_zone(pos, safe_zone) and not is_within_cross(pos, cross_bbox)]
 
         # Check if the robot is within the safe zone
         if not is_within_safe_zone(robot_center, safe_zone):
-            print("Robot is out of the safe zone! Stopping...")
+            print("Robot is out of the safe zone! Moving back into safe zone...")
             send_command('move_backward')
             time.sleep(1)  # Adjust the time the robot moves backward
+            continue  # Skip the rest of the loop and retry
         
         elif ball_positions:
             # Use A* to find the path to the closest ball
             start = robot_center
             closest_ball = min(ball_positions, key=lambda pos: np.linalg.norm(np.array(pos) - np.array(start)))
+            print(f"Closest ball: {closest_ball}")
             path = astar(start, closest_ball, obstacles, safe_zone)
 
             if not path:
@@ -224,16 +243,14 @@ while cap.isOpened():
         # Plot and show the results
         annotated_frame = results[0].plot()
 
-        # Draw the inner safe zone
+        # Draw the inner safe zone and target point
         if safe_zone:
             x1, y1, x2, y2 = safe_zone
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Blue rectangle for inner safe zone
             
             # Draw point in the middle of the left line of the safe zone, aligned vertically with the center of big goal
-            if big_goal_pos:
-                point_x = x1  # Left boundary of the safe zone
-                point_y = (y1 + y2) // 2  # Middle of the left boundary
-                cv2.circle(annotated_frame, (point_x, point_y), 5, (0, 255, 0), -1)  # Green point
+            if target_point:
+                cv2.circle(annotated_frame, target_point, 5, (0, 255, 0), -1)  # Green point
 
         cv2.imshow("Yolov8 Inference", annotated_frame)
 
@@ -241,22 +258,50 @@ while cap.isOpened():
         current_time = time.time()
         if current_time - start_time >= interval:
             start_time = current_time
-            # Move to the target point
-            send_command('move_to_target_point')
-            time.sleep(20)  # Allow time to move to the target point
+            
+            if target_point:
+                # Move to the target point
+                print(f"Moving to target point: {target_point}")
+                path_to_target = astar(robot_center, target_point, obstacles, safe_zone)
+                if path_to_target:
+                    for move in path_to_target[1:]:
+                        angle_to_move = calculate_angle(move, robot_center, robot_orientation)
+                        if -15 <= angle_to_move <= 15:
+                            send_command('move_forward')
+                        elif angle_to_move < -15:
+                            send_command('turn_left')
+                        else:
+                            send_command('turn_right')
+                        time.sleep(0.1)  # Adjust this duration
+                        robot_center = move
+                    send_command('stop')
 
-            # Align the robot to the point
-            send_command('align_to_target_point')
-            time.sleep(10)  # Allow time to align
+                # Ensure the robot is at the target point before shooting
+                if np.linalg.norm(np.array(robot_center) - np.array(target_point)) <= target_tolerance:
+                    # Align the robot to face the big goal
+                    if big_goal_pos:
+                        goal_angle = calculate_angle(big_goal_pos, robot_center, robot_orientation)
+                        while abs(goal_angle) > tolerance_angle:
+                            if goal_angle < 0:
+                                send_command('turn_left')
+                            else:
+                                send_command('turn_right')
+                            time.sleep(abs(goal_angle) * 0.1)  # Adjust duration based on angle
+                            goal_angle = calculate_angle(big_goal_pos, robot_center, robot_orientation)
+                        send_command('stop')
 
-            # Perform the shooting sequence
-            send_command('start_grabber_reverse')
-            for _ in range(3):  # Repeat the forward and backward motion 3 times
-                send_command('move_forward')
-                time.sleep(2)  # Adjust based on needed motion duration
-                send_command('move_backward')
-                time.sleep(2)  # Adjust based on needed motion duration
-            send_command('stop_grabber')
+                    # Perform the shooting sequence
+                    print("Starting shooting sequence")
+                    send_command('start_grabber_reverse')
+                    for _ in range(3):  # Repeat the forward and backward motion 3 times
+                        send_command('move_forward')
+                        time.sleep(2)  # Adjust based on needed motion duration
+                        send_command('move_backward')
+                        time.sleep(2)  # Adjust based on needed motion duration
+                    send_command('stop_grabber')
+                    print("Shooting sequence completed")
+                else:
+                    print("Robot is not at the target point. Retrying...")
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
